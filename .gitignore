@@ -68,3 +68,21 @@ vcpkg_installed/
 Testing/
 .cache/
 node_modules
+
+# Python
+__pycache__/
+*.py[cod]
+chickens/
+.venv/
+.pytest_cache/
+.mypy_cache/
+.env
+
+# Runtime output
+logs/
+uploads/
+
+# Frontend build
+dist/
+*.tsbuildinfo
+__pycache__
