@@ -1,37 +1,25 @@
-"""Camera-motion compensation (sparse Lucas-Kanade optical flow).
-
-When the camera pans, every box slides across the image even if no bird
-moves. That breaks two things: ByteTrack cannot match boxes that jumped, and
-every bird appears to have the camera's velocity.
-
-Each frame we follow background corners from the previous frame to this one
-(corners inside bird boxes are ignored) and take the median displacement as
-the camera shift. Its running sum is an offset that maps image pixels to
-stabilized "world" pixels:
-
-    world = image + offset
-
-Tracking and kinematics run in world coordinates; drawing subtracts the
-offset again. Translation only: zoom and rotation are not compensated.
-With a fixed camera the shift is ~0 and this is a no-op.
-"""
 
 import cv2
 import numpy as np
 
 
-FLOW_WIDTH = 480        # frames are downscaled to this width for the flow
+FLOW_WIDTH = 480  # frames are downscaled to this width for the flow
 MAX_CORNERS = 200
-MIN_CORNERS = 12        # fewer tracked corners than this -> assume no shift
+MIN_CORNERS = 12  # fewer tracked corners than this -> assume no shift
 
-
+# Camera-motion compensation by Lucas-Kanade optical flow. 
+# The camera offset is estimated from the median
+# displacement of corners in the background (outside of detected boxes). 
+# The offset is subtracted from the positions of all detections,
 class CameraMotion:
     def __init__(self) -> None:
         self.previous: np.ndarray | None = None
         self.previous_mask: np.ndarray | None = None
         self.offset = np.zeros(2, dtype=np.float64)
 
-    def update(self, frame: np.ndarray, boxes: np.ndarray) -> np.ndarray:
+    def update(self, frame: np.ndarray, 
+               boxes: np.ndarray
+               ) -> np.ndarray:
         """Returns the (x, y) offset to add to this frame's image coordinates.
 
         `boxes` are this frame's detections (xyxy, image pixels).
@@ -39,7 +27,8 @@ class CameraMotion:
 
         scale = FLOW_WIDTH / frame.shape[1]
         gray = cv2.cvtColor(
-            cv2.resize(frame, None, fx=scale, fy=scale,
+            cv2.resize(frame, None, 
+                       fx=scale, fy=scale,
                        interpolation=cv2.INTER_AREA),
             cv2.COLOR_BGR2GRAY,
         )
@@ -58,25 +47,37 @@ class CameraMotion:
 
         return self.offset.copy()
 
+
     @staticmethod
-    def _shift(previous: np.ndarray, mask: np.ndarray, current: np.ndarray) -> np.ndarray:
+    def _shift(previous: np.ndarray, 
+               mask: np.ndarray, 
+               current: np.ndarray
+               ) -> np.ndarray:
         """Median displacement of background corners, previous -> current."""
 
         corners = cv2.goodFeaturesToTrack(
-            previous, maxCorners=MAX_CORNERS, qualityLevel=0.01,
-            minDistance=7, mask=mask,
-        )
+            previous, 
+            maxCorners=MAX_CORNERS,
+            qualityLevel=0.01,
+            minDistance=7, 
+            mask=mask,
+        ) # Shi-Tomasi Corner Detector
 
         if corners is None or len(corners) < MIN_CORNERS:
             return np.zeros(2)
 
         moved, status, _ = cv2.calcOpticalFlowPyrLK(
-            previous, current, corners, None,
-            winSize=(21, 21), maxLevel=3,
+            previous, 
+            current, 
+            corners, 
+            None,
+            winSize=(21, 21),
+            maxLevel=3,
         )
         good = status.reshape(-1) == 1
 
         if good.sum() < MIN_CORNERS:
             return np.zeros(2)
 
+        # it takes the median of the displacements of the good corners, which is robust to outliers
         return np.median((moved - corners).reshape(-1, 2)[good], axis=0)
