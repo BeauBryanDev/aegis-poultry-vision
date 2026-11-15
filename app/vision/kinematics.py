@@ -1,25 +1,3 @@
-"""Per-bird kinematics from bounding boxes (classic finite differences).
-
-For every track, with (x, y) the box position in pixels and t in seconds:
-
-    vx = dx / dt        vy = dy / dt
-    speed = sqrt(vx^2 + vy^2)
-    accel = d(speed) / dt
-
-dx, dy and d(speed) are taken across a short window (KIN_WINDOW_SECONDS)
-instead of two consecutive frames: a box jitters by a pixel or two every
-frame, and dividing that jitter by one frame's dt would look like motion.
-
-dx is not the centroid displacement but the *rigid translation* of the box:
-the left and right edges must both move the same way, and the smaller of the
-two displacements is used (same for dy with top and bottom). When a neighbor
-occludes a bird its box grows or shrinks on one side; the centroid shifts but
-the bird did not move, and this estimate correctly reads zero.
-
-Speed and acceleration are also given in body lengths (BL), where one body
-length is sqrt(box width * box height). That makes them independent of how
-far the bird is from the camera.
-"""
 
 from collections import deque
 from dataclasses import dataclass
@@ -30,19 +8,19 @@ import numpy as np
 
 from app.core.config import settings
 
-
+# Per-bird kinematics from bounding boxes
 @dataclass(slots=True)
 class Motion:
-    cx: float           # centroid, px
+    cx: float   # centroid, px
     cy: float
-    vx: float           # px/s
-    vy: float           # px/s
-    speed: float        # px/s
-    accel: float        # px/s^2
-    body: float         # body length, px
-    speed_bl: float     # BL/s
-    accel_bl: float     # BL/s^2
-    ready: bool         # False until the track has a full window of history
+    vx: float   # px/s
+    vy: float   # px/s
+    speed: float  # px/s
+    accel: float  # px/s^2
+    body: float   # body length, px
+    speed_bl: float  # BL/s
+    accel_bl: float  # BL/s^2
+    ready: bool   # False until the track has a full window of history
 
 
 def rigid_shift(first_edge: float, second_edge: float) -> float:
@@ -55,12 +33,14 @@ def rigid_shift(first_edge: float, second_edge: float) -> float:
 
 
 class _History:
+    """ Keeps a short box history for one track and differentiates it."""
+    
     __slots__ = ("points", "speeds", "sizes", "last_step")
 
     def __init__(self, window: int, size_frames: int) -> None:
         self.points: deque[tuple[int, float, float, float, float]] = deque(
             maxlen=window + 1
-        )
+        )  # save last  boxes ( step, x1, y1, x2, y2) in the window time
         self.speeds: deque[tuple[int, float]] = deque(maxlen=window + 1)
         self.sizes: deque[float] = deque(maxlen=size_frames)
         self.last_step = -1
@@ -82,7 +62,8 @@ class KinematicEngine:
             self.max_gap, round(fps * settings.TRACK_LOST_SECONDS)
         ) + 1
         self.tracks: dict[int, _History] = {}
-
+    
+    # For every track, with (x, y) the box position in pixels and t in seconds
     def update(self, step: int,
                tracker_ids: np.ndarray,
                xyxy: np.ndarray
@@ -90,7 +71,9 @@ class KinematicEngine:
         """`step` is the index of the processed frame (dt = steps / fps)."""
 
         motions: dict[int, Motion] = {}
-
+        # vx = dx / dt  ,  vy = dy / dt
+        # speed = sqrt(vx^2 + vy^2)
+        # accel = d(speed) / dt
         for track_id, box in zip(tracker_ids, xyxy):
             x1, y1, x2, y2 = (float(v) for v in box)
             motions[int(track_id)] = self._update_track(
@@ -101,12 +84,20 @@ class KinematicEngine:
 
         return motions
 
-    def _update_track(self, track_id: int, step: int,
-                      x1: float, y1: float, x2: float, y2: float) -> Motion:
+    def _update_track(self, track_id: int, 
+                      step: int,
+                      x1: float, 
+                      y1: float, 
+                      x2: float, 
+                      y2: float
+                      ) -> Motion:
+        
         history = self.tracks.get(track_id)
 
         if history is None:
+            # A new track: create a history for it and add the first box.
             history = self.tracks[track_id] = _History(self.window, self.size_frames)
+            
         elif step - history.last_step > self.max_gap:
             # The bird was lost for a while: its jump back is not a movement.
             history.reset()
@@ -133,9 +124,14 @@ class KinematicEngine:
                 accel = (speed - first_speed) / ((step - first_step) / self.fps)
 
         return Motion(
-            cx=(x1 + x2) / 2, cy=(y1 + y2) / 2, vx=vx, vy=vy,
-            speed=speed, accel=accel, body=body,
-            speed_bl=speed / body, accel_bl=accel / body,
+            cx=(x1 + x2) / 2,
+            cy=(y1 + y2) / 2,
+            vx=vx, vy=vy,
+            speed=speed, 
+            accel=accel,
+            body=body,
+            speed_bl=speed / body, 
+            accel_bl=accel / body,
             ready=ready,
         )
 
