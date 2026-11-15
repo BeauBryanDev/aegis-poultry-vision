@@ -1,23 +1,3 @@
-"""Kinematic anomaly rule: a bird that suddenly speeds up.
-
-A bird bursts on a frame when both hold:
-
-    1. speed >= ANOMALY_SPEED_BL   or   accel >= ANOMALY_ACCEL_BL
-    2. speed >= ANOMALY_BASELINE_RATIO * its own recent baseline speed
-
-Rule 2 is what makes it "abrupt": a bird that has been walking fast for a
-while has a high baseline and is not flagged; one that was standing still
-and darts away is. The baseline is the median speed of the track over the
-last ANOMALY_BASELINE_SECONDS, never lower than ANOMALY_BASELINE_FLOOR.
-A bird is only judged once it has ANOMALY_MIN_HISTORY_SECONDS of history, so
-one that is first seen already moving is not mistaken for a sudden start.
-
-A burst must last one kinematic window plus ANOMALY_MIN_FRAMES consecutive
-frames to open an event. One bad box (an ID switch, a detection glitch) shows
-up in the windowed speed for exactly one window, so it can never trigger.
-The bird then stays in the "anomaly" state for ANOMALY_HOLD_SECONDS after its
-last burst frame.
-"""
 
 from collections import deque
 from statistics import median
@@ -26,7 +6,7 @@ from app.core.config import settings
 from app.core.constants import ACTIVE, ANOMALY, RESTING
 from app.vision.kinematics import Motion
 
-
+# Kinematic anomaly rule: a bird that suddenly speeds up
 class _TrackState:
     __slots__ = ("speeds", "streak", "hold_until", "last_step")
 
@@ -40,7 +20,7 @@ class _TrackState:
 class AnomalyMonitor:
     def __init__(self, fps: float, window: int) -> None:
         self.fps = fps
-        # The newest `window` speeds are left out of the baseline: they
+        # The newest window speeds are left out of the baseline: they
         # already contain the burst we are trying to compare against it.
         self.recent = window
         self.min_streak = window + settings.ANOMALY_MIN_FRAMES
@@ -52,7 +32,8 @@ class AnomalyMonitor:
         self.baseline_frames = max(2, round(fps * settings.ANOMALY_BASELINE_SECONDS))
         self.hold_frames = max(1, round(fps * settings.ANOMALY_HOLD_SECONDS))
         self.forget_after = max(
-            self.hold_frames, round(fps * settings.TRACK_LOST_SECONDS)
+            self.hold_frames, 
+            round(fps * settings.TRACK_LOST_SECONDS)
         ) + 1
 
         self.tracks: dict[int, _TrackState] = {}
@@ -61,14 +42,16 @@ class AnomalyMonitor:
         self.active = 0
         self._frame = (1, 1, 0.0, 0.0)
 
+
     def update(self, step: int,
                motions: dict[int, Motion],
                width: int, height: int,
                offset: tuple[float, float] = (0.0, 0.0)
                ) -> dict[int, str]:
-        """Returns the activity state of every bird in the frame.
+        """ 
+        Returns the activity state of every bird in the frame.
 
-        `offset` is the camera offset the motions were measured with; it is
+        offset is the camera offset the motions were measured with; it is
         removed again so event positions are in image coordinates.
         """
 
@@ -94,14 +77,21 @@ class AnomalyMonitor:
 
         return states
 
+
     def _baseline(self, track: _TrackState) -> float:
         past = list(track.speeds)[:-self.recent]
         own = median(past) if past else 0.0
 
         return max(own, settings.ANOMALY_BASELINE_FLOOR)
 
-    def _update_track(self, track_id: int, track: _TrackState, step: int,
-                      motion: Motion) -> str:
+
+    def _update_track(self, 
+                      track_id: int, 
+                      track: _TrackState, 
+                      step: int,
+                      motion: Motion
+                      ) -> str:
+        
         if not motion.ready:
             track.streak = 0
             return ANOMALY if step <= track.hold_until else RESTING
@@ -132,10 +122,17 @@ class AnomalyMonitor:
 
         return ACTIVE if motion.speed_bl >= settings.ACTIVE_SPEED_BL else RESTING
 
-    def _open_event(self, track_id: int, step: int, motion: Motion,
-                    baseline: float, trigger: str) -> None:
+
+    def _open_event(self, track_id: int, 
+                    step: int, 
+                    motion: Motion,
+                    baseline: float, 
+                    trigger: str
+                    ) -> None:
+        """ It save the  last MAX_EVENTS events in a deque, and counts them. """
         width, height, offset_x, offset_y = self._frame
         self.total_events += 1
+        
         self.events.append({
             "id": self.total_events,
             "track_id": track_id,
@@ -151,7 +148,9 @@ class AnomalyMonitor:
             ],
         })
 
+
     def _forget_old_tracks(self, step: int) -> None:
+        """ it forgets tracks that have not been seen for a while, to avoid memory leaks. """
         stale = [
             track_id for track_id, track in self.tracks.items()
             if step - track.last_step > self.forget_after
@@ -160,7 +159,9 @@ class AnomalyMonitor:
         for track_id in stale:
             del self.tracks[track_id]
 
+
     def state(self) -> dict:
+        
         return {
             "active": self.active,
             "detected": self.total_events > 0,
