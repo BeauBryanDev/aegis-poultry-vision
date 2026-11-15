@@ -142,7 +142,7 @@ class AnomalyMonitor:
             "accel": round(motion.accel_bl, 2),
             "baseline": round(baseline, 2),
             "ratio": round(motion.speed_bl / baseline, 1),
-            "position": [
+            "position": [  # normalized to image coordinates
                 round(min(max((motion.cx - offset_x) / width, 0.0), 1.0), 4),
                 round(min(max((motion.cy - offset_y) / height, 0.0), 1.0), 4),
             ],

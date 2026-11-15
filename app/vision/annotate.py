@@ -1,29 +1,28 @@
-"""OpenCV drawing: boxes, track IDs, velocity arrows, counters, anomaly banner."""
 
 import cv2
 import numpy as np
 
 from app.core.constants import ACTIVE, ANOMALY, RESTING
 
+# OpenCV drawing: boxes, track IDs, velocity arrows, counters, anomaly banner
 
 FONT = cv2.FONT_HERSHEY_SIMPLEX
 
-# BGR, one color per activity state. Same colors as the frontend legend
-# (ACTIVITY_COLOR in frontend/src/theme.ts) - keep the two in sync.
+# BGR, one color per activity state. 
 STATE_COLORS: dict[str, tuple[int, int, int]] = {
-    RESTING: (38, 168, 249),    # amber  #f9a826
-    ACTIVE: (94, 197, 34),      # green  #22c55e
-    ANOMALY: (54, 67, 244),     # red    #f44336
+    RESTING: (38, 168, 249), # amber  #f9a826
+    ACTIVE: (94, 197, 34),  # green  #22c55e
+    ANOMALY: (54, 67, 244),  # red    #f44336
 }
 CYAN = (191, 212, 45)           # #2dd4bf
 RED = (0, 0, 255)
 WHITE = (255, 255, 255)
 BLACK = (0, 0, 0)
 
-ARROW_SECONDS = 0.25    # an arrow shows where the bird would be after this long
+ARROW_SECONDS = 0.25  # an arrow shows where the bird would be after this long
 
-
-def _label(frame: np.ndarray, text: str,
+def _label(frame: np.ndarray, 
+           text: str,
            x: int,
            y: int,
            color, scale: float
@@ -41,7 +40,7 @@ def _label(frame: np.ndarray, text: str,
 
 
 def draw_tracks(frame: np.ndarray, tracks: list[dict]) -> None:
-    """`tracks` are the per-bird dicts built by the pipeline (pixel fields)."""
+    """tracks are the per-bird dicts built by the pipeline (pixel fields)."""
 
     scale = max(0.35, frame.shape[0] / 1600)
     thickness = max(1, round(frame.shape[0] / 480))
@@ -58,10 +57,15 @@ def draw_tracks(frame: np.ndarray, tracks: list[dict]) -> None:
 
         if state != RESTING:
             cx, cy = (x1 + x2) // 2, (y1 + y2) // 2
+            (y1 + y2) // 2
             tip = (round(cx + track["vx"] * ARROW_SECONDS),
                    round(cy + track["vy"] * ARROW_SECONDS))
-            cv2.arrowedLine(frame, (cx, cy), tip, color, thickness,
-                            cv2.LINE_AA, tipLength=0.3)
+            
+            cv2.arrowedLine(frame, (cx, cy), tip, 
+                            color,
+                            thickness,
+                            cv2.LINE_AA,
+                            tipLength=0.3)
 
         text = f"#{track['id']}"
         if anomalous:
@@ -88,6 +92,7 @@ def draw_counters(frame: np.ndarray,
         (f"anomaly {states[ANOMALY]}", STATE_COLORS[ANOMALY]),
         (f"events {events}", WHITE),
     ]
+    # width is the max text width + 40px padding, height is line_h * len(lines) + 16px padding
     width = max(cv2.getTextSize(t, FONT, scale, thickness)[0][0] for t, _ in lines) + 40
 
     overlay = frame.copy()
@@ -95,7 +100,8 @@ def draw_counters(frame: np.ndarray,
     cv2.addWeighted(overlay, 0.55, frame, 0.45, 0, dst=frame)
 
     for i, (text, color) in enumerate(lines):
-        cv2.putText(frame, text, (18, 8 + line_h * (i + 1) - 6), FONT, scale,
+        cv2.putText(frame, text, (18, 8 + line_h * (i + 1) - 6), 
+                    FONT, scale,
                     color, thickness, cv2.LINE_AA)
 
 

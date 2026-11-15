@@ -1,4 +1,3 @@
-"""Per-video pipeline: detect -> stabilize -> track -> count -> kinematics -> anomaly -> annotate."""
 
 import time
 from collections.abc import Iterator
@@ -19,17 +18,20 @@ from app.vision.detector import ChickenDetector
 from app.vision.kinematics import KinematicEngine
 from app.vision.tracker import ChickenTracker
 
-
+# Per-video pipeline: detect -> stabilize -> track -> count -> kinematics -> anomaly -> annotate.
 class VideoPipeline:
-    """Holds all per-video state (tracker, counter, kinematics, anomalies).
+    """
+    Holds all per-video state (tracker, counter, kinematics, anomalies).
 
     One instance per video; the ONNX session is shared across instances.
-    `fps` is the rate of the frames actually processed (source fps / stride).
+    fps is the rate of the frames actually processed (source fps / stride).
     """
 
     def __init__(self, fps: float) -> None:
         self.detector = ChickenDetector(
-            get_yolo_session(), settings.DET_CONF, settings.NMS_IOU
+            get_yolo_session(), 
+            settings.DET_CONF, 
+            settings.NMS_IOU
         )
         self.camera = CameraMotion() if settings.CAMERA_COMPENSATION else None
         self.tracker = ChickenTracker(fps)
@@ -41,7 +43,7 @@ class VideoPipeline:
         self.tracks: list[dict] = []
 
     def process(self, frame: np.ndarray) -> np.ndarray:
-        """Runs the pipeline on one BGR frame and returns it annotated."""
+        """Runs the full vision pipeline on one BGR frame and returns it annotated."""
 
         height, width = frame.shape[:2]
 
@@ -68,7 +70,7 @@ class VideoPipeline:
 
         for box, track_id, confidence in zip(
             image_boxes, tracker_ids, tracks.confidence
-        ):
+            ):
             track_id = int(track_id)
             motion = motions[track_id]
             state = states[track_id]
@@ -79,10 +81,10 @@ class VideoPipeline:
                 "confidence": round(float(confidence), 3),
                 "state": state,
                 "box": [
-                    round(min(max(float(box[0]) / width, 0.0), 1.0), 4),
-                    round(min(max(float(box[1]) / height, 0.0), 1.0), 4),
-                    round(min(max(float(box[2]) / width, 0.0), 1.0), 4),
-                    round(min(max(float(box[3]) / height, 0.0), 1.0), 4),
+                    round( min( max( float( box[0] ) / width, 0.0), 1.0) , 4) ,
+                    round( min( max( float( box[1] ) / height, 0.0), 1.0 ), 4 ),
+                    round( min( max( float( box[2] ) / width, 0.0), 1.0) , 4) ,
+                    round( min( max( float( box[3] ) / height, 0.0), 1.0 ), 4 ),
                 ],
                 "vx": round(motion.vx, 1),
                 "vy": round(motion.vy, 1),
@@ -100,14 +102,18 @@ class VideoPipeline:
 
         annotate.draw_tracks(frame, drawable)
         annotate.draw_counters(
-            frame, self.counter.live, self.counter.total_unique(),
-            self.states, self.anomaly.total_events,
+            frame, 
+            self.counter.live, 
+            self.counter.total_unique(),
+            self.states,
+            self.anomaly.total_events,
         )
         annotate.draw_anomaly(frame, self.anomaly.active)
 
         self.step += 1
 
         return frame
+
 
     def stats(self) -> dict:
         return {
@@ -171,5 +177,6 @@ def process_video(path: Path, fps: float) -> Iterator[tuple[np.ndarray, dict]]:
             )
 
             yield annotated, stats
+            
     finally:
         capture.release()
