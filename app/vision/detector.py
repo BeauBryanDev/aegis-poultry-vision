@@ -1,4 +1,3 @@
-"""YOLO11s chicken detector: ONNX inference, decode and NMS."""
 
 import numpy as np
 import onnxruntime as ort
@@ -7,6 +6,7 @@ import supervision as sv
 from app.core.exceptions import InferenceError
 from app.vision.preprocess import letterbox_640
 
+# YOLO11s chicken detector: ONNX inference, decode and NMS.
 
 def box_iou(box: np.ndarray, boxes: np.ndarray) -> np.ndarray:
     """IoU between one xyxy box and an (N, 4) array of xyxy boxes."""
@@ -32,7 +32,7 @@ def nms(boxes: np.ndarray,
     order = scores.argsort()[::-1]
     keep: list[int] = []
 
-    while order.size:
+    while order.size:  #  len(order) > 0:
         best = order[0]
         keep.append(int(best))
         rest = order[1:]
@@ -65,7 +65,7 @@ class ChickenDetector:
         confidence = predictions[:, 4:].max(axis=1)
 
         mask = confidence >= self.conf
-        if not mask.any():
+        if not mask.any():  # this YOLO CNN is single-class, so no need to return class_id
             return sv.Detections.empty()
 
         cx, cy, w, h = predictions[mask, :4].T
@@ -73,6 +73,7 @@ class ChickenDetector:
 
         # cxcywh in letterbox space -> xyxy in the original frame
         xyxy = np.stack([cx - w / 2, cy - h / 2, cx + w / 2, cy + h / 2], axis=1)
+        # np stack converts (N, 4) -> (4, N), so we transpose back to (N, 4)
         xyxy[:, [0, 2]] = (xyxy[:, [0, 2]] - pad_x) / scale
         xyxy[:, [1, 3]] = (xyxy[:, [1, 3]] - pad_y) / scale
         xyxy[:, [0, 2]] = xyxy[:, [0, 2]].clip(0, width)
@@ -81,7 +82,7 @@ class ChickenDetector:
         keep = nms(xyxy, confidence, self.iou)
 
         return sv.Detections(
-            xyxy=xyxy[keep].astype(np.float32),
-            confidence=confidence[keep].astype(np.float32),
-            class_id=np.zeros(len(keep), dtype=int),
+            xyxy=xyxy[keep].astype(np.float32), # pixel coordinates in the original frame
+            confidence=confidence[keep].astype(np.float32), # confidence scores
+            class_id=np.zeros(len(keep), dtype=int), # class IDs (all zeros for single-class detector)
         )

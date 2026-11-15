@@ -1,10 +1,10 @@
-"""Frame preprocessing for the chicken detector."""
 
 import cv2
 import numpy as np
 
 from app.core.constants import LETTERBOX_PAD, YOLO_SIZE
 
+# Frame preprocessing for the chicken detector
 
 def letterbox_640(frame: np.ndarray) -> tuple[np.ndarray, float, tuple[int, int]]:
     """BGR frame -> (1, 3, 640, 640) float32 blob, plus scale and (pad_x, pad_y).
@@ -18,12 +18,16 @@ def letterbox_640(frame: np.ndarray) -> tuple[np.ndarray, float, tuple[int, int]
     new_w, new_h = round(width * scale), round(height * scale)
     pad_x, pad_y = (YOLO_SIZE - new_w) // 2, (YOLO_SIZE - new_h) // 2
 
-    canvas = np.full((YOLO_SIZE, YOLO_SIZE, 3), LETTERBOX_PAD, dtype=np.uint8)
+    canvas = np.full((YOLO_SIZE, YOLO_SIZE, 3), 
+                     LETTERBOX_PAD, 
+                     dtype=np.uint8)
     canvas[pad_y:pad_y + new_h, pad_x:pad_x + new_w] = cv2.resize(
-        frame, (new_w, new_h), interpolation=cv2.INTER_LINEAR
+        frame, (new_w, new_h), 
+        interpolation=cv2.INTER_LINEAR
     )
 
     blob = cv2.cvtColor(canvas, cv2.COLOR_BGR2RGB).transpose(2, 0, 1)
-    blob = np.ascontiguousarray(blob, dtype=np.float32)[None] / 255.0
+    blob = np.ascontiguousarray(blob, dtype=np.float32)[None] / 255.0 
+    # Normalize pixels to [0, 1] and add batch dimension
 
     return blob, scale, (pad_x, pad_y)
