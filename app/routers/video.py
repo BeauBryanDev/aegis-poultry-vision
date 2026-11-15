@@ -1,12 +1,3 @@
-"""Upload a video, then watch it annotated as an MJPEG stream.
-
-    POST /upload                  -> {video_id, ...}
-    GET  /videos/{id}/stream      -> multipart MJPEG of annotated frames
-    GET  /videos/{id}/stats       -> live counts + anomaly state (poll it)
-
-Nothing is persisted: the upload is a temp file deleted when the stream ends,
-and stats live in memory only.
-"""
 
 import threading
 import uuid
@@ -87,6 +78,7 @@ def _public(job: dict) -> dict:
     }
 
 
+# POST /upload    -> {video_id, ...}
 @router.post("/upload")
 async def upload_video(file: UploadFile) -> dict:
     suffix = Path(file.filename or "").suffix.lower()
@@ -172,16 +164,17 @@ def _mjpeg(job: dict) -> Iterator[bytes]:
         logger.exception("Processing failed for video %s", job["video_id"])
     finally:
         job["path"].unlink(missing_ok=True)
-        logger.info("Video %s finished: %s", job["video_id"], job["status"])
+        logger.info("Video %s finished: %s", 
+                    job["video_id"], job["status"])
 
 
 async def _stream(job: dict) -> AsyncIterator[bytes]:
-    """Runs `_mjpeg` in the threadpool and always closes it.
+    """Runs _mjpeg in the threadpool and always closes it.
 
     When the client disconnects, Starlette just stops iterating. A plain sync
     generator would be left suspended: the job would stay "processing" forever
     and its temp file would never be deleted. Closing it here raises
-    GeneratorExit inside `_mjpeg`, which marks the job cancelled and cleans up.
+    GeneratorExit inside _mjpeg, which marks the job cancelled and cleans up.
     """
 
     frames = _mjpeg(job)
@@ -193,6 +186,7 @@ async def _stream(job: dict) -> AsyncIterator[bytes]:
         frames.close()
 
 
+# GET  /videos/{id}/stream  -> multipart MJPEG of annotated frames
 @router.get("/videos/{video_id}/stream")
 def stream_video(video_id: str) -> StreamingResponse:
     with _lock:
@@ -213,6 +207,7 @@ def stream_video(video_id: str) -> StreamingResponse:
     )
 
 
+# GET  /videos/{id}/stats  -> live counts + anomaly state (poll it)
 @router.get("/videos/{video_id}/stats")
 def video_stats(video_id: str) -> dict:
     return _public(_get_job(video_id))
