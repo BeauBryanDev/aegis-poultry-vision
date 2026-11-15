@@ -8,18 +8,17 @@ export const http = axios.create({
   timeout: 15_000,
 });
 
-// Attach auth token if present (wired up once auth exists).
-http.interceptors.request.use((config) => {
-  const token = localStorage.getItem("pv_token");
-  if (token) config.headers.Authorization = `Bearer ${token}`;
-  return config;
-});
-
-// Unwrap { data } envelopes and surface a normalized error message.
+// Surface a normalized error message. FastAPI puts it in `detail`.
 http.interceptors.response.use(
   (res) => res,
   (error) => {
-    const message = error?.response?.data?.error ?? error?.message ?? "Request failed";
+    const detail = error?.response?.data?.detail;
+    const message =
+      (typeof detail === "string" ? detail : null) ??
+      (error?.response ? `Request failed (${error.response.status})` : null) ??
+      (error?.code === "ERR_NETWORK" ? "Backend is not reachable." : null) ??
+      error?.message ??
+      "Request failed";
     return Promise.reject(new Error(message));
   },
 );

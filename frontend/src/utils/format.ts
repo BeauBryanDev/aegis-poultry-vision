@@ -26,6 +26,13 @@ export function formatTime(iso: string): string {
   });
 }
 
+/** 72.4 seconds -> "1:12.4" (video time). */
+export function formatVideoTime(seconds: number): string {
+  const m = Math.floor(seconds / 60);
+  const s = seconds - m * 60;
+  return `${m}:${s.toFixed(1).padStart(4, "0")}`;
+}
+
 /** Merge conditional class names (tiny clsx). */
 export function cx(...parts: Array<string | false | null | undefined>): string {
   return parts.filter(Boolean).join(" ");

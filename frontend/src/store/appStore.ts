@@ -1,25 +1,23 @@
-/** Global app selection state: active farm, house, and AI model info. */
+/** Global app state: backend health (polled from the layout). */
 
 import { create } from "zustand";
-import type { AiModelInfo, Farm, House } from "@/types/model.types";
-import { MOCK_FARMS, MOCK_HOUSES, MOCK_MODEL } from "@/services/mock.data";
+import { api } from "@/services/api";
+
+export type BackendStatus = "checking" | "online" | "degraded" | "offline";
 
 interface AppState {
-  farms: Farm[];
-  houses: House[];
-  model: AiModelInfo;
-  activeFarmId: string;
-  activeHouseId: string;
-  setActiveFarm: (id: string) => void;
-  setActiveHouse: (id: string) => void;
+  backend: BackendStatus;
+  checkHealth: () => Promise<void>;
 }
 
 export const useAppStore = create<AppState>((set) => ({
-  farms: MOCK_FARMS,
-  houses: MOCK_HOUSES,
-  model: MOCK_MODEL,
-  activeFarmId: MOCK_FARMS[0].id,
-  activeHouseId: MOCK_HOUSES[0].id,
-  setActiveFarm: (id) => set({ activeFarmId: id }),
-  setActiveHouse: (id) => set({ activeHouseId: id }),
+  backend: "checking",
+  checkHealth: async () => {
+    try {
+      const health = await api.getHealth();
+      set({ backend: health.status === "ok" ? "online" : "degraded" });
+    } catch {
+      set({ backend: "offline" });
+    }
+  },
 }));

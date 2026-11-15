@@ -1,48 +1,71 @@
-import { useEffect, useState } from "react";
-import { api } from "@/services/api";
-import { COLORS } from "@/theme";
-import { ACTIVITY_LABEL } from "@/theme";
-import { useUiStore } from "@/store/uiStore";
-import type { PerformanceMetrics, PoultryReport as PoultryReportData, Zone } from "@/types/model.types";
+import { useMemo } from "react";
+import { ACTIVITY_COLOR, ACTIVITY_LABEL, COLORS } from "@/theme";
+import { useVideoStore } from "@/store/videoStore";
+import { activityBreakdown, zoneCounts } from "@/utils/chickens";
+import { formatVideoTime } from "@/utils/format";
 
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
-import { Dropdown } from "@/components/ui/Dropdown";
-import { DownloadIcon } from "@/components/ui/Icon";
+import { ChartIcon, DownloadIcon } from "@/components/ui/Icon";
 import { PoultryReport } from "@/components/dashboard/PoultryReport";
 import { ZoneCard } from "@/components/dashboard/ZoneCard";
 import { MetricCard } from "@/components/dashboard/MetricCard";
 import { StreamPanel } from "@/components/live_monitor/StreamPanel";
 import { BarChart } from "@/components/charts/BarChart";
 import { LineChart } from "@/components/charts/LineChart";
-import { RadarChart } from "@/components/charts/RadarChart";
-import { ChartIcon } from "@/components/ui/Icon";
 
 export default function Dashboard() {
-  const [report, setReport] = useState<PoultryReportData | null>(null);
-  const [zones, setZones] = useState<Zone[]>([]);
-  const [perf, setPerf] = useState<PerformanceMetrics | null>(null);
-  const { timeRange, setTimeRange } = useUiStore();
+  const { stats, history, phase, fileName } = useVideoStore();
 
-  useEffect(() => {
-    api.getPoultryReport().then(setReport);
-    api.getZones().then(setZones);
-    api.getPerformance().then(setPerf);
-  }, []);
+  const breakdown = useMemo(() => activityBreakdown(stats), [stats]);
+  const zones = useMemo(() => zoneCounts(stats), [stats]);
+
+  const series = useMemo(() => {
+    const at = (pick: (p: (typeof history)[number]) => number) =>
+      history.map((p) => ({ t: formatVideoTime(p.time), value: pick(p) }));
+
+    return {
+      count: at((p) => p.live),
+      events: at((p) => p.events),
+      speed: at((p) => p.speed),
+    };
+  }, [history]);
+
+  const lastSpeed = history.length ? history[history.length - 1].speed : 0;
+
+  /** Saves the run summary (everything except the per-frame track list). */
+  const downloadReport = () => {
+    if (!stats) return;
+    const { tracks: _tracks, ...summary } = stats;
+    const report = { file: fileName, ...summary, history };
+    const url = URL.createObjectURL(new Blob([JSON.stringify(report, null, 2)], { type: "application/json" }));
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `poultry-report-${stats.video_id.slice(0, 8)}.json`;
+    link.click();
+    URL.revokeObjectURL(url);
+  };
 
   return (
     <div className="grid grid-cols-1 gap-4 xl:grid-cols-[320px_minmax(0,1fr)_360px]">
       {/* Left column */}
       <div className="flex flex-col gap-4">
-        {report && <PoultryReport data={report} />}
-        <Card title="Zone Distribution">
+        <PoultryReport
+          liveCount={stats?.live_count ?? 0}
+          peakCount={stats?.peak_count ?? 0}
+          totalUnique={stats?.total_unique ?? 0}
+          countTrend={series.count}
+          breakdown={breakdown}
+          live={phase === "processing"}
+        />
+        <Card title="Zone Distribution (frame quadrants)">
           <div className="grid grid-cols-2 gap-3">
             {zones.map((z) => (
               <ZoneCard key={z.id} zone={z} />
             ))}
           </div>
         </Card>
-        <Button className="w-full">
+        <Button className="w-full" disabled={!stats || stats.frame_index === 0} onClick={downloadReport}>
           <DownloadIcon size={18} />
           Download Report
         </Button>
@@ -55,64 +78,36 @@ export default function Dashboard() {
 
       {/* Right column */}
       <div className="flex flex-col gap-4">
-        <Card
-          title="Performance Metrics"
-          icon={<ChartIcon size={16} />}
-          action={
-            <Dropdown
-              value={timeRange}
-              onChange={(v) => setTimeRange(v as typeof timeRange)}
-              options={[
-                { value: "today", label: "Today" },
-                { value: "week", label: "This Week" },
-                { value: "month", label: "This Month" },
-              ]}
-            />
-          }
-        >
-          {perf && (
-            <>
-              <div className="hud-label mb-1 text-[10px]">Activity Distribution (%)</div>
-              <BarChart
-                data={perf.activityDistribution.map((a) => ({
-                  label: ACTIVITY_LABEL[a.state],
-                  value: a.percent,
-                }))}
-              />
-            </>
-          )}
+        <Card title="Activity Distribution (%)" icon={<ChartIcon size={16} />}>
+          <BarChart
+            data={breakdown.map((a) => ({
+              label: ACTIVITY_LABEL[a.state],
+              value: Math.round(a.percent * 10) / 10,
+              color: ACTIVITY_COLOR[a.state],
+            }))}
+          />
         </Card>
 
-        {perf && (
-          <Card title="Bird Count Over Time">
-            <LineChart data={perf.birdCountOverTime} />
-          </Card>
-        )}
+        <Card title="Bird Count Over Time">
+          <LineChart data={series.count} />
+        </Card>
 
-        {perf && (
-          <Card title="Activity Radar">
-            <RadarChart data={perf.activityRadar} />
-          </Card>
-        )}
-
-        {perf && (
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-1">
-            <MetricCard
-              title="Anomaly Alerts"
-              value={perf.anomalyAlerts.today}
-              unit="Today"
-              valueColor={COLORS.anomaly}
-              chart={<LineChart data={perf.anomalyAlerts.trend} color={COLORS.anomaly} height={48} showAxes={false} />}
-            />
-            <MetricCard
-              title="Health Index"
-              value={perf.healthIndex.value}
-              unit="/100"
-              valueColor={COLORS.health}
-              chart={<LineChart data={perf.healthIndex.trend} color={COLORS.health} height={48} showAxes={false} />}
-            />
-          </div>
-        )}
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-1">
+          <MetricCard
+            title="Anomaly Events"
+            value={stats?.anomaly.total_events ?? 0}
+            unit={stats?.anomaly.active ? `${stats.anomaly.active} bird(s) flagged now` : "this video"}
+            valueColor={COLORS.anomaly}
+            chart={<LineChart data={series.events} color={COLORS.anomaly} height={48} showAxes={false} />}
+          />
+          <MetricCard
+            title="Mean Flock Speed"
+            value={lastSpeed.toFixed(2)}
+            unit="body lengths / s"
+            valueColor={COLORS.secondary}
+            chart={<LineChart data={series.speed} color={COLORS.secondary} height={48} showAxes={false} />}
+          />
+        </div>
       </div>
     </div>
   );

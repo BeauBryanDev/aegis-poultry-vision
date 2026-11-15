@@ -151,3 +151,17 @@ export const CameraFlipIcon = (p: IconProps) => (
     <path d="M14 7.5 13 9.7l2.2.3M10 16.5l1-2.2-2.2-.3" />
   </svg>
 );
+
+export const UploadIcon = (p: IconProps) => (
+  <svg {...base(p)}>
+    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+    <path d="M17 8l-5-5-5 5" />
+    <path d="M12 3v12" />
+  </svg>
+);
+
+export const StopIcon = (p: IconProps) => (
+  <svg {...base(p)}>
+    <rect x="5" y="5" width="14" height="14" rx="2" />
+  </svg>
+);

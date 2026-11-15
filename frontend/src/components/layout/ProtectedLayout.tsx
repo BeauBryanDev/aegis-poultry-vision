@@ -1,21 +1,28 @@
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { Outlet } from "react-router-dom";
 import { Header } from "./Header";
 import { NavBar } from "./NavBar";
 import { BottomNav } from "./BottomNav";
 import { Footer } from "./Footer";
-import { api } from "@/services/api";
+import { useAppStore } from "@/store/appStore";
+import { useVideoStore } from "@/store/videoStore";
+
+const HEALTH_POLL_MS = 5_000;
 
 /**
- * Authenticated app shell: header + desktop nav + routed content + footer,
- * with a mobile bottom tab bar. (Auth gating is a stub until the API exists.)
+ * App shell: header + desktop nav + routed content + footer, with a mobile
+ * bottom tab bar. Polls backend health; the alert badge is the number of
+ * anomaly events in the current video.
  */
 export function ProtectedLayout() {
-  const [alertCount, setAlertCount] = useState(0);
+  const checkHealth = useAppStore((s) => s.checkHealth);
+  const alertCount = useVideoStore((s) => s.stats?.anomaly.total_events ?? 0);
 
   useEffect(() => {
-    api.getAlerts().then((alerts) => setAlertCount(alerts.filter((a) => !a.acknowledged).length));
-  }, []);
+    checkHealth();
+    const id = setInterval(checkHealth, HEALTH_POLL_MS);
+    return () => clearInterval(id);
+  }, [checkHealth]);
 
   return (
     <div className="flex min-h-screen flex-col">

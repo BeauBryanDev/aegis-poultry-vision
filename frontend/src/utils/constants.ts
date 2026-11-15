@@ -3,11 +3,15 @@
 export const APP_NAME = "PoultryVision";
 export const APP_TAGLINE = "AI Powered Poultry Monitoring";
 
-export const API_URL = import.meta.env.VITE_API_URL ?? "/api";
+/** FastAPI prefix; Vite proxies `/api` to localhost:8000 in dev. */
+export const API_URL = import.meta.env.VITE_API_URL ?? "/api/v1";
 export const WS_URL = import.meta.env.VITE_WS_URL ?? "/ws";
 
-/** Toggle the mock data layer. Flip to false once FastAPI endpoints exist. */
-export const USE_MOCKS = true;
+/** Name of the detector the backend runs (model/chickens_model.onnx). */
+export const MODEL_NAME = "YOLO11s (chicken_v1)";
+
+/** Video types the backend accepts (`ALLOWED_SUFFIXES` in app/routers/video.py). */
+export const VIDEO_ACCEPT = ".mp4,.avi,.mov,.mkv,.webm";
 
 /** Primary navigation — shared by desktop top-nav and mobile bottom-bar. */
 export interface NavItem {
@@ -20,7 +24,7 @@ export interface NavItem {
 
 export const NAV_ITEMS: NavItem[] = [
   { key: "dashboard", label: "Dashboard", path: "/", mobile: true },
-  { key: "monitor", label: "Live Monitor", path: "/monitor", mobile: true },
+  { key: "monitor", label: "Monitor", path: "/monitor", mobile: true },
   { key: "analytics", label: "Analytics", path: "/analytics", mobile: true },
   { key: "reports", label: "Reports", path: "/reports" },
   { key: "alerts", label: "Alerts", path: "/alerts", mobile: true },
